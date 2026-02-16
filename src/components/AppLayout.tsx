@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Home, Dumbbell, BarChart3, Trophy, User, LogOut } from "lucide-react";
+import fitstarLogo from "@/assets/fitstar-logo.png";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
@@ -24,7 +25,10 @@ const AppLayout = () => {
       {/* Top bar */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
         <div className="container flex h-14 items-center justify-between">
-          <h1 className="font-display text-xl font-bold text-gradient-primary">FitStar</h1>
+          <div className="flex items-center gap-2">
+            <img src={fitstarLogo} alt="FitStar logo" className="h-8 w-8 rounded-lg" />
+            <h1 className="font-display text-xl font-bold text-gradient-primary">FitStar</h1>
+          </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground hidden sm:block">
               {profile?.display_name}
