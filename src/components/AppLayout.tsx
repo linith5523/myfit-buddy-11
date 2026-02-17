@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Home, Dumbbell, BarChart3, Trophy, User, LogOut } from "lucide-react";
+import { Home, Dumbbell, BarChart3, Trophy, User, LogOut, Shield } from "lucide-react";
 import fitstarLogo from "@/assets/fitstar-logo.png";
 
 const navItems = [
@@ -12,7 +12,7 @@ const navItems = [
 ];
 
 const AppLayout = () => {
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -67,6 +67,21 @@ const AppLayout = () => {
               <span>{label}</span>
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 rounded-lg px-3 py-1.5 text-xs transition-colors ${
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`
+              }
+            >
+              <Shield className="h-5 w-5" />
+              <span>Admin</span>
+            </NavLink>
+          )}
         </div>
       </nav>
     </div>
