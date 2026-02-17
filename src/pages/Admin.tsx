@@ -8,8 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Edit2, Save, X, Dumbbell, ClipboardList, Zap } from "lucide-react";
+import { Plus, Trash2, Edit2, Save, X, Dumbbell, ClipboardList, Zap, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
 
 interface Program {
   id: string;
@@ -44,6 +47,21 @@ interface Exercise {
   order_index: number;
 }
 
+interface UserData {
+  user_id: string;
+  display_name: string | null;
+  fitness_level: string | null;
+  fitness_goal: string | null;
+  xp: number;
+  level: number;
+  current_streak: number;
+  longest_streak: number;
+  created_at: string;
+  total_workouts: number;
+  total_achievements: number;
+  total_checkins: number;
+}
+
 const Admin = () => {
   const { isAdmin, loading } = useAuth();
   const { toast } = useToast();
@@ -55,6 +73,10 @@ const Admin = () => {
   const [editingProgram, setEditingProgram] = useState<Partial<Program> | null>(null);
   const [editingWorkout, setEditingWorkout] = useState<Partial<Workout> | null>(null);
   const [editingExercise, setEditingExercise] = useState<Partial<Exercise> | null>(null);
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [userWorkoutLogs, setUserWorkoutLogs] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   useEffect(() => {
     fetchPrograms();
@@ -81,6 +103,56 @@ const Admin = () => {
   const fetchExercises = async (workoutId: string) => {
     const { data } = await supabase.from("exercises").select("*").eq("workout_id", workoutId).order("order_index");
     if (data) setExercises(data);
+  };
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    const [profilesRes, logsRes, achievementsRes, checkinsRes] = await Promise.all([
+      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+      supabase.from("workout_logs").select("user_id"),
+      supabase.from("achievements").select("user_id"),
+      supabase.from("daily_checkins").select("user_id"),
+    ]);
+    const profiles = profilesRes.data || [];
+    const logs = logsRes.data || [];
+    const achievements = achievementsRes.data || [];
+    const checkins = checkinsRes.data || [];
+    const countBy = (arr: any[], val: string) => arr.filter(r => r.user_id === val).length;
+    setUsers(profiles.map(p => ({
+      user_id: p.user_id,
+      display_name: p.display_name,
+      fitness_level: p.fitness_level,
+      fitness_goal: p.fitness_goal,
+      xp: p.xp,
+      level: p.level,
+      current_streak: p.current_streak,
+      longest_streak: p.longest_streak,
+      created_at: p.created_at,
+      total_workouts: countBy(logs, p.user_id),
+      total_achievements: countBy(achievements, p.user_id),
+      total_checkins: countBy(checkins, p.user_id),
+    })));
+    setLoadingUsers(false);
+  };
+
+  const fetchUserWorkoutLogs = async (userId: string) => {
+    const { data } = await supabase
+      .from("workout_logs")
+      .select("*, programs(title)")
+      .eq("user_id", userId)
+      .order("started_at", { ascending: false })
+      .limit(10);
+    setUserWorkoutLogs(data || []);
+  };
+
+  const toggleUserExpand = async (userId: string) => {
+    if (expandedUser === userId) {
+      setExpandedUser(null);
+      setUserWorkoutLogs([]);
+    } else {
+      setExpandedUser(userId);
+      await fetchUserWorkoutLogs(userId);
+    }
   };
 
   const saveProgram = async () => {
@@ -150,7 +222,8 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="programs">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="users" onClick={() => { if (users.length === 0) fetchUsers(); }}><Users className="mr-1.5 h-4 w-4" />Users</TabsTrigger>
           <TabsTrigger value="programs"><Dumbbell className="mr-1.5 h-4 w-4" />Programs</TabsTrigger>
           <TabsTrigger value="workouts"><ClipboardList className="mr-1.5 h-4 w-4" />Workouts</TabsTrigger>
           <TabsTrigger value="exercises"><Zap className="mr-1.5 h-4 w-4" />Exercises</TabsTrigger>
@@ -291,6 +364,101 @@ const Admin = () => {
                   </CardHeader>
                 </Card>
               ))}
+            </>
+          )}
+        </TabsContent>
+        {/* Users Tab */}
+        <TabsContent value="users" className="space-y-4">
+          {loadingUsers ? (
+            <div className="flex justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : users.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No users found. Click the Users tab to load data.</p>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">{users.length} registered user{users.length !== 1 ? "s" : ""}</p>
+              <div className="space-y-3">
+                {users.map(u => (
+                  <Card key={u.user_id}>
+                    <CardHeader
+                      className="cursor-pointer py-3"
+                      onClick={() => toggleUserExpand(u.user_id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">
+                            {(u.display_name || "?")[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <CardTitle className="text-sm">{u.display_name || "Unknown"}</CardTitle>
+                            <p className="text-xs text-muted-foreground">
+                              Joined {format(new Date(u.created_at), "MMM d, yyyy")}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs">Lv {u.level}</Badge>
+                          {expandedUser === u.user_id ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    {expandedUser === u.user_id && (
+                      <CardContent className="space-y-4 pt-0">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          <div className="rounded-lg bg-secondary/50 p-3 text-center">
+                            <p className="text-lg font-bold text-foreground">{u.xp}</p>
+                            <p className="text-xs text-muted-foreground">XP</p>
+                          </div>
+                          <div className="rounded-lg bg-secondary/50 p-3 text-center">
+                            <p className="text-lg font-bold text-foreground">{u.current_streak}</p>
+                            <p className="text-xs text-muted-foreground">Streak</p>
+                          </div>
+                          <div className="rounded-lg bg-secondary/50 p-3 text-center">
+                            <p className="text-lg font-bold text-foreground">{u.total_workouts}</p>
+                            <p className="text-xs text-muted-foreground">Workouts</p>
+                          </div>
+                          <div className="rounded-lg bg-secondary/50 p-3 text-center">
+                            <p className="text-lg font-bold text-foreground">{u.total_achievements}</p>
+                            <p className="text-xs text-muted-foreground">Badges</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div><span className="text-muted-foreground">Fitness Level:</span> <span className="capitalize">{u.fitness_level || "—"}</span></div>
+                          <div><span className="text-muted-foreground">Goal:</span> <span className="capitalize">{u.fitness_goal || "—"}</span></div>
+                          <div><span className="text-muted-foreground">Longest Streak:</span> {u.longest_streak} days</div>
+                          <div><span className="text-muted-foreground">Check-ins:</span> {u.total_checkins}</div>
+                        </div>
+                        {userWorkoutLogs.length > 0 && (
+                          <div>
+                            <p className="mb-2 text-sm font-medium">Recent Workouts</p>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-xs">Date</TableHead>
+                                  <TableHead className="text-xs">Program</TableHead>
+                                  <TableHead className="text-xs">Duration</TableHead>
+                                  <TableHead className="text-xs">Volume</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {userWorkoutLogs.map(log => (
+                                  <TableRow key={log.id}>
+                                    <TableCell className="text-xs">{format(new Date(log.started_at), "MMM d")}</TableCell>
+                                    <TableCell className="text-xs">{log.programs?.title || "—"}</TableCell>
+                                    <TableCell className="text-xs">{log.duration_seconds ? `${Math.round(log.duration_seconds / 60)}m` : "—"}</TableCell>
+                                    <TableCell className="text-xs">{log.total_volume ? `${log.total_volume}kg` : "—"}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </CardContent>
+                    )}
+                  </Card>
+                ))}
+              </div>
             </>
           )}
         </TabsContent>
