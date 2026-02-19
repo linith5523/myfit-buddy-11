@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CheckCircle2, SkipForward, Timer, Trophy } from "lucide-react";
+import ExerciseIllustration from "@/components/ExerciseIllustration";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Exercise = Tables<"exercises">;
@@ -203,9 +204,19 @@ const WorkoutSession = () => {
       ) : currentExercise ? (
         <Card className="border-border bg-card">
           <CardContent className="space-y-4 p-6">
-            <div>
-              <h3 className="font-display text-xl font-bold">{currentExercise.name}</h3>
-              <p className="text-sm text-muted-foreground">{currentExercise.description}</p>
+            <div className="flex gap-4 items-start">
+              <ExerciseIllustration
+                exerciseId={currentExercise.id}
+                exerciseName={currentExercise.name}
+                muscleGroup={currentExercise.muscle_group}
+                exerciseType={currentExercise.exercise_type}
+                imageUrl={currentExercise.image_url}
+                className="h-32 w-32 flex-shrink-0"
+              />
+              <div className="flex-1">
+                <h3 className="font-display text-xl font-bold">{currentExercise.name}</h3>
+                <p className="text-sm text-muted-foreground">{currentExercise.description}</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-center">

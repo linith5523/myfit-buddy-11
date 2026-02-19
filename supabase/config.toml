@@ -1,1 +1,4 @@
 project_id = "wmnhznrpmkmqfoudtuuv"
+
+[functions.generate-exercise-image]
+verify_jwt = false
