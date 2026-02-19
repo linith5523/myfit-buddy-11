@@ -122,6 +122,7 @@ export type Database = {
           description: string | null
           exercise_type: string | null
           id: string
+          image_url: string | null
           muscle_group: string | null
           name: string
           order_index: number
@@ -136,6 +137,7 @@ export type Database = {
           description?: string | null
           exercise_type?: string | null
           id?: string
+          image_url?: string | null
           muscle_group?: string | null
           name: string
           order_index?: number
@@ -150,6 +152,7 @@ export type Database = {
           description?: string | null
           exercise_type?: string | null
           id?: string
+          image_url?: string | null
           muscle_group?: string | null
           name?: string
           order_index?: number
