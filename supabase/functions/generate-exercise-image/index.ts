@@ -7,6 +7,37 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function generateFrame(
+  apiKey: string,
+  exerciseName: string,
+  muscleGroup: string | null,
+  exerciseType: string | null,
+  phase: string
+): Promise<string | null> {
+  const prompt = `Create a clean, modern fitness illustration showing a person performing a ${exerciseName} exercise in the ${phase} position. ${muscleGroup ? `Target muscle group: ${muscleGroup}.` : ""} ${exerciseType ? `Exercise type: ${exerciseType}.` : ""} Style: minimalist athletic illustration with bold outlines, dark charcoal background (#1a1a2e), vibrant green (#22c55e) and orange (#f97316) accent colors on clothing/highlights, showing proper form. The figure should be a simple, gender-neutral athletic silhouette. No text, no labels, no watermarks. Square composition.`;
+
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
+    }),
+  });
+
+  if (!resp.ok) {
+    console.error(`AI error for ${phase}:`, resp.status);
+    return null;
+  }
+
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.images?.[0]?.image_url?.url || null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -29,7 +60,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check if image already exists
+    // Check if frames already exist
     const { data: exercise } = await supabase
       .from("exercises")
       .select("image_url")
@@ -37,90 +68,72 @@ serve(async (req) => {
       .single();
 
     if (exercise?.image_url) {
-      return new Response(JSON.stringify({ image_url: exercise.image_url }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Generate illustration using Lovable AI
-    const prompt = `Create a clean, modern fitness illustration showing a person performing a ${exerciseName} exercise. ${muscleGroup ? `Target muscle group: ${muscleGroup}.` : ""} ${exerciseType ? `Exercise type: ${exerciseType}.` : ""} Style: minimalist athletic illustration with bold lines, dark background with vibrant green/orange accent colors, showing proper form with motion lines to indicate movement. The figure should be a simple, gender-neutral athletic silhouette. No text or labels.`;
-
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{ role: "user", content: prompt }],
-        modalities: ["image", "text"],
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      try {
+        const cached = JSON.parse(exercise.image_url);
+        if (cached.frames && cached.frames.length > 0) {
+          return new Response(JSON.stringify(cached), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } catch {
+        // Not JSON, old single-image format — regenerate
       }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+
+    // Generate two frames: starting position and movement position
+    const phases = ["starting/ready position", "mid-movement/peak contraction position"];
+    const frameUrls: string[] = [];
+
+    for (const phase of phases) {
+      const imageData = await generateFrame(LOVABLE_API_KEY, exerciseName, muscleGroup, exerciseType, phase);
+      if (!imageData) continue;
+
+      const base64Match = imageData.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/);
+      if (!base64Match) continue;
+
+      const imageFormat = base64Match[1];
+      const base64String = base64Match[2];
+      const binaryData = Uint8Array.from(atob(base64String), (c) => c.charCodeAt(0));
+
+      const idx = frameUrls.length;
+      const fileName = `${exerciseId}_frame${idx}.${imageFormat}`;
+      const { error: uploadError } = await supabase.storage
+        .from("exercise-illustrations")
+        .upload(fileName, binaryData, {
+          contentType: `image/${imageFormat}`,
+          upsert: true,
         });
+
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        continue;
       }
-      const errText = await aiResponse.text();
-      console.error("AI gateway error:", aiResponse.status, errText);
-      throw new Error("AI image generation failed");
+
+      const { data: publicUrl } = supabase.storage
+        .from("exercise-illustrations")
+        .getPublicUrl(fileName);
+
+      frameUrls.push(publicUrl.publicUrl);
     }
 
-    const aiData = await aiResponse.json();
-    const imageData = aiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-    if (!imageData) {
-      throw new Error("No image returned from AI");
+    if (frameUrls.length === 0) {
+      throw new Error("Failed to generate any frames");
     }
 
-    // Extract base64 and upload to storage
-    const base64Match = imageData.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/);
-    if (!base64Match) throw new Error("Invalid image data format");
+    const result = { frames: frameUrls };
 
-    const imageFormat = base64Match[1];
-    const base64String = base64Match[2];
-    const binaryData = Uint8Array.from(atob(base64String), (c) => c.charCodeAt(0));
+    // Cache in DB
+    await supabase.from("exercises").update({ image_url: JSON.stringify(result) }).eq("id", exerciseId);
 
-    const fileName = `${exerciseId}.${imageFormat}`;
-    const { error: uploadError } = await supabase.storage
-      .from("exercise-illustrations")
-      .upload(fileName, binaryData, {
-        contentType: `image/${imageFormat}`,
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("Upload error:", uploadError);
-      throw new Error("Failed to upload image");
-    }
-
-    const { data: publicUrl } = supabase.storage
-      .from("exercise-illustrations")
-      .getPublicUrl(fileName);
-
-    const imageUrl = publicUrl.publicUrl;
-
-    // Cache the URL in the exercises table
-    await supabase.from("exercises").update({ image_url: imageUrl }).eq("id", exerciseId);
-
-    return new Response(JSON.stringify({ image_url: imageUrl }), {
+    return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("generate-exercise-image error:", e);
+    const status = (e as any)?.status || 500;
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

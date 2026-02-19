@@ -20,15 +20,24 @@ const ExerciseIllustration = ({
   imageUrl: cachedUrl,
   className = "",
 }: ExerciseIllustrationProps) => {
-  const [imageUrl, setImageUrl] = useState<string | null>(cachedUrl || null);
-  const [loading, setLoading] = useState(!cachedUrl);
+  const [frames, setFrames] = useState<string[]>([]);
+  const [activeFrame, setActiveFrame] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  // Try to parse cached frames
   useEffect(() => {
     if (cachedUrl) {
-      setImageUrl(cachedUrl);
-      setLoading(false);
-      return;
+      try {
+        const parsed = JSON.parse(cachedUrl);
+        if (parsed.frames?.length > 0) {
+          setFrames(parsed.frames);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // Not JSON / old format — regenerate
+      }
     }
 
     let cancelled = false;
@@ -37,18 +46,16 @@ const ExerciseIllustration = ({
       try {
         const { data, error: fnError } = await supabase.functions.invoke(
           "generate-exercise-image",
-          {
-            body: { exerciseId, exerciseName, muscleGroup, exerciseType },
-          }
+          { body: { exerciseId, exerciseName, muscleGroup, exerciseType } }
         );
 
         if (cancelled) return;
 
         if (fnError || data?.error) {
-          console.error("Image generation failed:", fnError || data?.error);
+          console.error("Generation failed:", fnError || data?.error);
           setError(true);
-        } else if (data?.image_url) {
-          setImageUrl(data.image_url);
+        } else if (data?.frames?.length > 0) {
+          setFrames(data.frames);
         } else {
           setError(true);
         }
@@ -63,6 +70,15 @@ const ExerciseIllustration = ({
     return () => { cancelled = true; };
   }, [exerciseId, exerciseName, muscleGroup, exerciseType, cachedUrl]);
 
+  // Animate between frames
+  useEffect(() => {
+    if (frames.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveFrame((prev) => (prev + 1) % frames.length);
+    }, 1200);
+    return () => clearInterval(interval);
+  }, [frames.length]);
+
   if (loading) {
     return (
       <div className={`relative overflow-hidden rounded-lg bg-secondary ${className}`}>
@@ -70,14 +86,14 @@ const ExerciseIllustration = ({
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <p className="text-xs text-muted-foreground">Generating...</p>
+            <p className="text-[10px] text-muted-foreground">Generating...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  if (error || !imageUrl) {
+  if (error || frames.length === 0) {
     return (
       <div className={`flex items-center justify-center rounded-lg bg-secondary ${className}`}>
         <Dumbbell className="h-8 w-8 text-muted-foreground" />
@@ -86,13 +102,30 @@ const ExerciseIllustration = ({
   }
 
   return (
-    <div className={`overflow-hidden rounded-lg bg-secondary ${className}`}>
-      <img
-        src={imageUrl}
-        alt={`${exerciseName} illustration`}
-        className="h-full w-full object-cover"
-        loading="lazy"
-      />
+    <div className={`relative overflow-hidden rounded-lg bg-secondary ${className}`}>
+      {frames.map((frame, idx) => (
+        <img
+          key={idx}
+          src={frame}
+          alt={`${exerciseName} - frame ${idx + 1}`}
+          className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-in-out"
+          style={{ opacity: idx === activeFrame ? 1 : 0 }}
+          loading="lazy"
+        />
+      ))}
+      {/* Animated indicator dots */}
+      {frames.length > 1 && (
+        <div className="absolute bottom-1 left-1/2 flex -translate-x-1/2 gap-1">
+          {frames.map((_, idx) => (
+            <div
+              key={idx}
+              className={`h-1 w-1 rounded-full transition-colors duration-300 ${
+                idx === activeFrame ? "bg-primary" : "bg-muted-foreground/40"
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
