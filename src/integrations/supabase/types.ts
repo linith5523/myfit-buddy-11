@@ -172,6 +172,60 @@ export type Database = {
           },
         ]
       }
+      food_logs: {
+        Row: {
+          calories: number
+          carbs_g: number | null
+          created_at: string
+          fat_g: number | null
+          fiber_g: number | null
+          food_name: string
+          id: string
+          logged_date: string
+          meal_type: string | null
+          protein_g: number | null
+          serving_size: string | null
+          sodium_mg: number | null
+          sugar_g: number | null
+          user_id: string
+          vitamins: Json | null
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number | null
+          created_at?: string
+          fat_g?: number | null
+          fiber_g?: number | null
+          food_name: string
+          id?: string
+          logged_date?: string
+          meal_type?: string | null
+          protein_g?: number | null
+          serving_size?: string | null
+          sodium_mg?: number | null
+          sugar_g?: number | null
+          user_id: string
+          vitamins?: Json | null
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number | null
+          created_at?: string
+          fat_g?: number | null
+          fiber_g?: number | null
+          food_name?: string
+          id?: string
+          logged_date?: string
+          meal_type?: string | null
+          protein_g?: number | null
+          serving_size?: string | null
+          sodium_mg?: number | null
+          sugar_g?: number | null
+          user_id?: string
+          vitamins?: Json | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

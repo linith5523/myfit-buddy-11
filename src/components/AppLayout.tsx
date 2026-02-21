@@ -1,13 +1,13 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Home, Dumbbell, BarChart3, Trophy, User, LogOut, Shield } from "lucide-react";
+import { Home, Dumbbell, BarChart3, Trophy, User, LogOut, Shield, Apple } from "lucide-react";
 import fitstarLogo from "@/assets/fitstar-logo.png";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
   { to: "/programs", icon: Dumbbell, label: "Programs" },
+  { to: "/nutrition", icon: Apple, label: "Nutrition" },
   { to: "/progress", icon: BarChart3, label: "Progress" },
-  { to: "/achievements", icon: Trophy, label: "Badges" },
   { to: "/profile", icon: User, label: "Profile" },
 ];
 
