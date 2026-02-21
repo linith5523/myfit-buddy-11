@@ -14,6 +14,7 @@ import WorkoutSession from "./pages/WorkoutSession";
 import Progress from "./pages/Progress";
 import Achievements from "./pages/Achievements";
 import Profile from "./pages/Profile";
+import Nutrition from "./pages/Nutrition";
 import Install from "./pages/Install";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/workout/:id" element={<WorkoutSession />} />
               <Route path="/progress" element={<Progress />} />
               <Route path="/achievements" element={<Achievements />} />
+              <Route path="/nutrition" element={<Nutrition />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/admin" element={<Admin />} />
             </Route>
